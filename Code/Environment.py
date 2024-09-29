@@ -1,7 +1,10 @@
 import numpy as np
 import math
 from gymnasium import Env, spaces
-from Environment.Obstacle import Obstacle
+from tensorflow.python.autograph.pyct.anno import Static
+from torch.ao.nn.quantized.functional import threshold
+
+from Code.Obstacle import Obstacle
 
 
 class Environment(Env):
@@ -36,6 +39,9 @@ class Environment(Env):
         # self.initialize_robot_positions(self.save_pos_init_robot, self.save_angle_init_robot)
         self.obstacles = obstacles
         self.init_goal_angle = 0
+
+        self.path = []
+        self.index_path = 0
 
         # Définir les espaces d'action et d'observation
         self.action_space = spaces.Box(low=-1, high=1, shape=(2,),
@@ -146,7 +152,6 @@ class Environment(Env):
 
         return self.robot_positions
 
-
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
 
@@ -156,7 +161,6 @@ class Environment(Env):
         self.init_obstacles()
 
         return self.getState(), {}
-
 
     def step(self, actions):
         self.robot_last_positions = np.copy(self.robot_positions)
@@ -171,7 +175,7 @@ class Environment(Env):
         done = False
         if self.check_collision():  # Collision
             done = True
-        elif np.linalg.norm(self.robot_positions[0] - self.goal_position) < self.threshold_distance: # Goal reached
+        elif np.linalg.norm(self.robot_positions[0] - self.goal_position) < self.threshold_distance:  # Goal reached
             done = True
 
         if False:
@@ -219,6 +223,70 @@ class Environment(Env):
         v_right = np.clip(v_right, -1, 1)
 
         return np.array([v_left, v_right])
+
+    def pilot_robot_curves(self):
+        # Angle entre la direction actuelle du robot et l'objectif
+        angle_to_goal1 = self.anglePosition(self.path[self.index_path])
+
+        if self.index_path + 1 < len(self.path):
+            angle_to_goal2 = self.anglePosition(self.path[self.index_path + 1])
+        else:
+            angle_to_goal2 = self.anglePosition(self.goal_position)
+
+        # Paramètres de contrôle
+        turn_threshold = 10  # Seuil pour décider si le robot doit tourner
+        turn_speed = 0.6  # Vitesse de rotation
+        forward_speed = 1  # Vitesse en ligne droite
+        threshold_distance = 200
+
+        # Initialisation des vitesses de roues
+        v_left = 0
+        v_right = 0
+
+
+        # Cas 1 : le robot ne ragarde pas le point et la distance est grande
+        if abs(angle_to_goal1) > turn_threshold and np.linalg.norm(self.robot_positions[0] - self.path[self.index_path]) > threshold_distance:
+            print("Tourner")
+            # Si l'angle est positif, tourner à droite (vitesse roue gauche > vitesse roue droite)
+            if angle_to_goal1 > 0:
+                v_left = turn_speed
+                v_right = -turn_speed
+            # Si l'angle est négatif, tourner à gauche (vitesse roue droite > vitesse roue gauche)
+            else:
+                v_left = -turn_speed
+                v_right = turn_speed
+
+        elif np.linalg.norm(self.robot_positions[0] - self.path[self.index_path]) < threshold_distance:
+            print("Courbe")
+            v_left, v_right = self.speedWheel(np.linalg.norm(self.robot_positions[0] - self.path[self.index_path]), angle_to_goal2)
+
+        # Cas 2 : le robot est presque aligné avec l'objectif, avancer en ligne droite
+        else:
+            print("Tout droit")
+            v_left = forward_speed
+            v_right = forward_speed
+
+        # Normaliser les vitesses entre -1 et 1
+        v_left = np.clip(v_left, -1, 1)
+        v_right = np.clip(v_right, -1, 1)
+
+        return np.array([v_left, v_right])
+
+
+    def speedWheel(self, distance_to_point, angle):
+        r = math.tan(angle * math.pi / 180) * distance_to_point
+
+        robot_radius = self.robot_diameter / 2
+
+        if angle > 0:
+            v_left = 1
+            v_right = 1 - 2 * r / (2 * robot_radius)
+        else:
+            v_left = 1 - 2 * r / (2 * robot_radius)
+            v_right = 1
+
+        return np.array([v_left, v_right])
+
 
     def normalizePositions(self):  # TODO assert
         result = []
@@ -270,7 +338,7 @@ class Environment(Env):
         assert -180 <= angle_relative <= 180
         return angle_relative
 
-    def anglePosition(self, pos): # Angle entre position et direction du robot, gauche -> négatif, droite -> positif
+    def anglePosition(self, pos):  # Angle entre position et direction du robot, gauche -> négatif, droite -> positif
         # Calculer la direction du goal par rapport à la position du robot
         goal_direction = pos - self.robot_positions[0]
 

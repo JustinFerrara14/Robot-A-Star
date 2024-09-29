@@ -7,9 +7,9 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import DummyVecEnv
 import random
 
-from Environment.Environment import Environment
-from Environment.AStar import AStarAlgorithm
-from Environment.Obstacle import Obstacle
+from Code.Environment import Environment
+from Code.AStar import AStarAlgorithm
+from Code.Obstacle import Obstacle
 
 
 class App:
@@ -305,7 +305,10 @@ class App:
             self.astar = AStarAlgorithm(4000, 2000, 20, self.environment.obstacles)
             self.path = self.astar.a_star_search(self.environment.robot_positions[0], self.environment.goal_position)
 
-        for position in self.path:
+        # for all position in path
+        for i in range(len(self.path) - 1):
+            position = self.path[i]
+            next_position = self.path[i + 1]
             done = False
             while not done:
                 self.draw_robot()
@@ -313,7 +316,10 @@ class App:
                 if self.command_left.get() and self.command_right.get():
                     actions = [float(self.command_left.get()), float(self.command_right.get())]
                 else:
-                    actions = self.environment.pilot_robot(position)
+                    # actions = self.environment.pilot_robot(position)
+                    self.environment.path = np.copy(self.path)
+                    self.environment.index_path = i
+                    actions = self.environment.pilot_robot_curves()
 
                 command_left = actions[0]
                 self.current_command_left_label.config(text=f"Command to left: {command_left:.2f}")
