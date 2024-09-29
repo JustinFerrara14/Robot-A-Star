@@ -7,7 +7,8 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import DummyVecEnv
 import random
 
-
+from Environment.Environment import Environment
+from Environment.AStar import AStarAlgorithm
 from Environment.Obstacle import Obstacle
 
 
@@ -18,10 +19,8 @@ class App:
         self.root.geometry("1000x800")
 
         self.environment = None
-        self.model = None
-
-        self.model_button = tk.Button(root, text="Select Model", command=self.load_model)
-        self.model_button.pack()
+        self.astar = None
+        self.path = None
 
         self.start_label = tk.Label(root, text="Enter Start Position (x, y):")
         self.start_label.pack()
@@ -96,18 +95,6 @@ class App:
         self.current_reward_label.pack()
         self.current_reward_label.place(x=150, y=70)
 
-        # Step by step mode
-        self.step_by_step_mode = tk.BooleanVar(value=False)  # Flag to keep track of the mode
-        self.continue_simulation = False  # Flag to continue or pause simulation
-
-        self.step_by_step_label = tk.Label(root, text="Step-by-step Mode")
-        self.step_by_step_label.pack()
-        self.step_by_step_label.place(x=600, y=10)
-
-        self.step_by_step_slider = ttk.Checkbutton(root, variable=self.step_by_step_mode, onvalue=True, offvalue=False)
-        self.step_by_step_slider.pack()
-        self.step_by_step_slider.place(x=750, y=10)
-
         # Pilot mode
         self.manual_command_label = tk.Label(root, text="Enter manual command (left, right):")
         self.manual_command_label.pack()
@@ -163,16 +150,6 @@ class App:
 
         self.draw_legends()
 
-    """
-    def load_model(self):
-        model_path = filedialog.askopenfilename()
-        self.model = tf.keras.models.load_model(model_path)
-    """
-
-    def load_model(self):
-        model_path = filedialog.askopenfilename()
-        self.model = PPO.load(model_path)
-
     def reset_gui(self):
         self.reset_environment()
         self.canvas.delete("all")
@@ -209,8 +186,10 @@ class App:
                 obstacle_pos = obstacle.get_position()
                 obstacle_radius = obstacle.get_radius() * scale_x
                 scaled_obstacle_pos = (obstacle_pos[0] * scale_x, obstacle_pos[1] * scale_y)
-                self.canvas.create_oval(scaled_obstacle_pos[0] - obstacle_radius, scaled_obstacle_pos[1] - obstacle_radius,
-                                        scaled_obstacle_pos[0] + obstacle_radius, scaled_obstacle_pos[1] + obstacle_radius,
+                self.canvas.create_oval(scaled_obstacle_pos[0] - obstacle_radius,
+                                        scaled_obstacle_pos[1] - obstacle_radius,
+                                        scaled_obstacle_pos[0] + obstacle_radius,
+                                        scaled_obstacle_pos[1] + obstacle_radius,
                                         fill="black")
 
         # Robot
@@ -229,6 +208,17 @@ class App:
         self.canvas.create_oval(scaled_goal_pos[0] - goal_radius, scaled_goal_pos[1] - goal_radius,
                                 scaled_goal_pos[0] + goal_radius, scaled_goal_pos[1] + goal_radius,
                                 fill="green")
+
+        # Path
+        if self.path:
+            for i in range(len(self.path) - 1):
+                start_path = self.path[i]
+                end_path = self.path[i + 1]
+                scaled_start_path = (start_path[0] * scale_x, start_path[1] * scale_y)
+                scaled_end_path = (end_path[0] * scale_x, end_path[1] * scale_y)
+                self.canvas.create_line(scaled_start_path[0], scaled_start_path[1], scaled_end_path[0],
+                                        scaled_end_path[1],
+                                        fill="red", width=2)
 
         # Adding legends for the map
         self.draw_legends()
@@ -288,27 +278,6 @@ class App:
         self.obstacle3_y.insert(0, str(random.randint(150, max_y - 150)))
         self.obstacle3_rad.insert(0, str(150))
 
-
-
-    """
-    def start_simulation(self):
-        start_pos = (int(self.start_x.get()), int(self.start_y.get()))
-        goal_pos = (int(self.goal_x.get()), int(self.goal_y.get()))
-        start_angle = float(self.angle.get())
-
-        self.environment = Environment(4000, 2000, np.array(goal_pos))
-        self.environment.initialize_robot_positions(start_pos, start_angle)
-
-        done = False
-        while not done:
-            self.draw_robot()
-            state = self.environment.getState().flatten()
-            actions = self.model.predict(np.array([state]))[0]
-            state, reward, done = self.environment.step(actions)
-            self.root.update()
-            self.root.after(50)
-    """
-
     def start_simulation(self):
         # self.reset_environment()  # Reset the environment before starting the simulation
 
@@ -318,49 +287,49 @@ class App:
             start_angle = float(self.angle.get())
             obstacles = []
             if self.obstacle1_x.get() and self.obstacle1_y.get() and self.obstacle1_rad.get():
-                obstacles.append(Obstacle(int(self.obstacle1_x.get()), int(self.obstacle1_y.get()), int(self.obstacle1_rad.get())))
+                obstacles.append(
+                    Obstacle(int(self.obstacle1_x.get()), int(self.obstacle1_y.get()), int(self.obstacle1_rad.get())))
 
             if self.obstacle2_x.get() and self.obstacle2_y.get() and self.obstacle2_rad.get():
-                obstacles.append(Obstacle(int(self.obstacle2_x.get()), int(self.obstacle2_y.get()), int(self.obstacle2_rad.get())))
+                obstacles.append(
+                    Obstacle(int(self.obstacle2_x.get()), int(self.obstacle2_y.get()), int(self.obstacle2_rad.get())))
 
             if self.obstacle3_x.get() and self.obstacle3_y.get() and self.obstacle3_rad.get():
-                obstacles.append(Obstacle(int(self.obstacle3_x.get()), int(self.obstacle3_y.get()), int(self.obstacle3_rad.get())))
+                obstacles.append(
+                    Obstacle(int(self.obstacle3_x.get()), int(self.obstacle3_y.get()), int(self.obstacle3_rad.get())))
 
-            self.environment = CustomEnv(4000, 2000, np.array(goal_pos), start_pos, start_angle, obstacles)
+            self.environment = Environment(4000, 2000, np.array(goal_pos), start_pos, start_angle, obstacles)
             self.environment.init_robot_positions(start_pos, start_angle, np.array(goal_pos))
             self.environment.init_max_iterations()
 
-        self.vec_env = DummyVecEnv([lambda: self.environment])
-        self.continue_simulation = True
+            self.astar = AStarAlgorithm(4000, 2000, 20, self.environment.obstacles)
+            self.path = self.astar.a_star_search(self.environment.robot_positions[0], self.environment.goal_position)
 
-        while self.continue_simulation:
-            self.draw_robot()
-            state = self.environment.getState().flatten()
+        for position in self.path:
+            done = False
+            while not done:
+                self.draw_robot()
 
-            if self.command_left.get() and self.command_right.get():
-                actions = [float(self.command_left.get()), float(self.command_right.get())]
-            else:
-                actions, _ = self.model.predict(state)
+                if self.command_left.get() and self.command_right.get():
+                    actions = [float(self.command_left.get()), float(self.command_right.get())]
+                else:
+                    actions = self.environment.pilot_robot(position)
 
-            command_left = actions[0]
-            self.current_command_left_label.config(text=f"Command to left: {command_left:.2f}")
+                command_left = actions[0]
+                self.current_command_left_label.config(text=f"Command to left: {command_left:.2f}")
 
-            command_right = actions[1]
-            self.current_command_right_label.config(text=f"Command to right: {command_right:.2f}")
+                command_right = actions[1]
+                self.current_command_right_label.config(text=f"Command to right: {command_right:.2f}")
 
-            state, reward, done, _, _ = self.environment.step(actions)
+                done = self.environment.step(actions)
 
-            self.current_reward_label.config(text=f"Reward: {reward:.2f}")
+                if abs(self.environment.robot_positions[0][0] - position[
+                    0]) < self.environment.threshold_distance and abs(
+                        self.environment.robot_positions[0][1] - position[1]) < self.environment.threshold_distance:
+                    done = True
 
-            self.root.update()
-            self.root.after(50)
-
-            if self.step_by_step_mode.get():
-                self.continue_simulation = False
-
-            if done:
-                self.continue_simulation = False
-                self.reset_environment()
+                self.root.update()
+                self.root.after(50)
 
 
 if __name__ == "__main__":
