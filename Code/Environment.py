@@ -225,6 +225,19 @@ class Environment(Env):
         return np.array([v_left, v_right])
 
     def pilot_robot_curves(self):
+        # Paramètres de contrôle
+        turn_threshold = 10  # Seuil pour décider si le robot doit tourner
+        turn_speed = 0.6  # Vitesse de rotation
+        forward_speed = 1  # Vitesse en ligne droite
+        threshold_distance = 50
+
+        # Initialisation des vitesses de roues
+        v_left = 0
+        v_right = 0
+
+        if np.linalg.norm(self.robot_positions[0] - self.path[self.index_path]) < threshold_distance and self.index_path + 1 < len(self.path):
+            self.index_path += 1
+
         # Angle entre la direction actuelle du robot et l'objectif
         angle_to_goal1 = self.anglePosition(self.path[self.index_path])
 
@@ -233,38 +246,25 @@ class Environment(Env):
         else:
             angle_to_goal2 = self.anglePosition(self.goal_position)
 
-        # Paramètres de contrôle
-        turn_threshold = 10  # Seuil pour décider si le robot doit tourner
-        turn_speed = 0.6  # Vitesse de rotation
-        forward_speed = 1  # Vitesse en ligne droite
-        threshold_distance = 200
-
-        # Initialisation des vitesses de roues
-        v_left = 0
-        v_right = 0
-
 
         # Cas 1 : le robot ne ragarde pas le point et la distance est grande
-        if abs(angle_to_goal1) > turn_threshold and np.linalg.norm(self.robot_positions[0] - self.path[self.index_path]) > threshold_distance:
-            print("Tourner")
-            # Si l'angle est positif, tourner à droite (vitesse roue gauche > vitesse roue droite)
-            if angle_to_goal1 > 0:
-                v_left = turn_speed
-                v_right = -turn_speed
-            # Si l'angle est négatif, tourner à gauche (vitesse roue droite > vitesse roue gauche)
-            else:
-                v_left = -turn_speed
-                v_right = turn_speed
+        # if abs(angle_to_goal1) > turn_threshold and np.linalg.norm(self.robot_positions[0] - self.path[self.index_path]) > threshold_distance:
+        #     # Si l'angle est positif, tourner à droite (vitesse roue gauche > vitesse roue droite)
+        #     if angle_to_goal1 > 0:
+        #         v_left = turn_speed
+        #         v_right = -turn_speed
+        #     # Si l'angle est négatif, tourner à gauche (vitesse roue droite > vitesse roue gauche)
+        #     else:
+        #         v_left = -turn_speed
+        #         v_right = turn_speed
 
-        elif np.linalg.norm(self.robot_positions[0] - self.path[self.index_path]) < threshold_distance:
-            print("Courbe")
-            v_left, v_right = self.speedWheel(np.linalg.norm(self.robot_positions[0] - self.path[self.index_path]), angle_to_goal2)
+        # else :
+        #     v_left, v_right = self.speedWheel(np.linalg.norm(self.robot_positions[0] - self.path[self.index_path]), angle_to_goal2)
 
-        # Cas 2 : le robot est presque aligné avec l'objectif, avancer en ligne droite
-        else:
-            print("Tout droit")
-            v_left = forward_speed
-            v_right = forward_speed
+        v_left, v_right = self.speedWheel(np.linalg.norm(self.robot_positions[0] - self.path[self.index_path]),
+                                          angle_to_goal1)
+
+        # print("index path : ", self.index_path, " v_left : ", v_left, " v_right : ", v_right, " angle : ", angle_to_goal1, " distance : ", np.linalg.norm(self.robot_positions[0] - self.path[self.index_path]))
 
         # Normaliser les vitesses entre -1 et 1
         v_left = np.clip(v_left, -1, 1)
@@ -273,16 +273,14 @@ class Environment(Env):
         return np.array([v_left, v_right])
 
 
-    def speedWheel(self, distance_to_point, angle):
-        r = math.tan(angle * math.pi / 180) * distance_to_point
-
-        robot_radius = self.robot_diameter / 2
+    def speedWheel(self, distance_to_point, angle): # TODO remove error
+        r = distance_to_point / 2 * math.cos(math.radians((90 - abs(angle * 2))))
 
         if angle > 0:
             v_left = 1
-            v_right = 1 - 2 * r / (2 * robot_radius)
+            v_right = 1 - 2 * r / self.robot_diameter
         else:
-            v_left = 1 - 2 * r / (2 * robot_radius)
+            v_left = 1 - 2 * r / self.robot_diameter
             v_right = 1
 
         return np.array([v_left, v_right])

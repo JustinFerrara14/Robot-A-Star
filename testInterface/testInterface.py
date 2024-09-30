@@ -305,10 +305,9 @@ class App:
             self.astar = AStarAlgorithm(4000, 2000, 20, self.environment.obstacles)
             self.path = self.astar.a_star_search(self.environment.robot_positions[0], self.environment.goal_position)
 
-        # for all position in path
-        for i in range(len(self.path) - 1):
-            position = self.path[i]
-            next_position = self.path[i + 1]
+            self.environment.path = np.copy(self.path)
+            self.environment.index_path = 0
+
             done = False
             while not done:
                 self.draw_robot()
@@ -317,8 +316,6 @@ class App:
                     actions = [float(self.command_left.get()), float(self.command_right.get())]
                 else:
                     # actions = self.environment.pilot_robot(position)
-                    self.environment.path = np.copy(self.path)
-                    self.environment.index_path = i
                     actions = self.environment.pilot_robot_curves()
 
                 command_left = actions[0]
@@ -328,11 +325,6 @@ class App:
                 self.current_command_right_label.config(text=f"Command to right: {command_right:.2f}")
 
                 done = self.environment.step(actions)
-
-                if abs(self.environment.robot_positions[0][0] - position[
-                    0]) < self.environment.threshold_distance and abs(
-                        self.environment.robot_positions[0][1] - position[1]) < self.environment.threshold_distance:
-                    done = True
 
                 self.root.update()
                 self.root.after(50)

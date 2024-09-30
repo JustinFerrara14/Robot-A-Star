@@ -52,9 +52,7 @@ class AStarAlgorithm:
         row, col = dest
         prev_dir = None  # Variable pour suivre la direction précédente
 
-        # On inclut toujours le point de destination dans le chemin
-        path.append((col * self.spacing, row * self.spacing))
-
+        # On commence par le point de destination
         while not (cell_details[row][col].parent_i == row and cell_details[row][col].parent_j == col):
             temp_row = cell_details[row][col].parent_i
             temp_col = cell_details[row][col].parent_j
@@ -62,7 +60,7 @@ class AStarAlgorithm:
             # Calculer la direction actuelle
             current_dir = (row - temp_row, col - temp_col)
 
-            # Ajouter un point au chemin si la direction change
+            # Ajouter le point uniquement si la direction change
             if prev_dir is None or current_dir != prev_dir:
                 path.append((col * self.spacing, row * self.spacing))
 
@@ -72,18 +70,75 @@ class AStarAlgorithm:
             # Se déplacer vers le parent
             row, col = temp_row, temp_col
 
-        # Ajouter le point de départ au chemin
+        # Ajouter le point de départ
         path.append((col * self.spacing, row * self.spacing))
 
         # Inverser le chemin pour qu'il soit dans l'ordre correct
         path.reverse()
 
+        # Supprimer les doublons éventuels dans le chemin (s'il y a des points consécutifs identiques)
+        final_path = []
+        for pos in path:
+            if len(final_path) == 0 or final_path[-1] != pos:
+                final_path.append(pos)
+
         # Affichage du chemin
-        for position in path:
+        for position in final_path:
             print("->", position, end=" ")
         print()
 
-        return path
+        curved_path = self.put_points_curve(final_path, 100)
+        for position in curved_path:
+            print("->", position, end=" ")
+        print()
+
+        return curved_path
+
+    import math
+
+    def put_points_curve(self, path, max_curve_distance):
+        curved_path = []
+
+        for i in range(len(path) - 2):
+            p1 = path[i]  # Current point
+            p2 = path[i + 1]  # Next point
+            p3 = path[i + 2]  # Point after p2
+
+            # Calculate vectors between points
+            v1 = (p2[0] - p1[0], p2[1] - p1[1])
+            v2 = (p3[0] - p2[0], p3[1] - p2[1])
+
+            # Length of segments between points
+            d1 = math.sqrt(v1[0] ** 2 + v1[1] ** 2)
+            d2 = math.sqrt(v2[0] ** 2 + v2[1] ** 2)
+
+            # Add the current point p1 to the path
+            if i == 0:
+                curved_path.append(p1)
+
+            # Compute the distance to start and end the curve
+            curve_start_dist = min(max_curve_distance, d1 / 2)
+            curve_end_dist = min(max_curve_distance, d2 / 2)
+
+            # Place points for the curve if the distances are sufficient
+            if curve_start_dist > 0:
+                curve_start = (
+                    p2[0] - (v1[0] / d1) * curve_start_dist,
+                    p2[1] - (v1[1] / d1) * curve_start_dist,
+                )
+                curved_path.append(curve_start)
+
+            if curve_end_dist > 0:
+                curve_end = (
+                    p2[0] + (v2[0] / d2) * curve_end_dist,
+                    p2[1] + (v2[1] / d2) * curve_end_dist,
+                )
+                curved_path.append(curve_end)
+
+        # Add the last two points of the original path
+        curved_path.append(path[-1])
+
+        return curved_path
 
     def a_star_search(self, src, dest):
         src_grid = self.mm_to_grid(src)
