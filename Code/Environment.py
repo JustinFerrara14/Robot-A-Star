@@ -264,7 +264,6 @@ class Environment(Env):
         v_left, v_right = self.speedWheel(np.linalg.norm(self.robot_positions[0] - self.path[self.index_path]),
                                           angle_to_goal1)
 
-        # print("index path : ", self.index_path, " v_left : ", v_left, " v_right : ", v_right, " angle : ", angle_to_goal1, " distance : ", np.linalg.norm(self.robot_positions[0] - self.path[self.index_path]))
 
         # Normaliser les vitesses entre -1 et 1
         v_left = np.clip(v_left, -1, 1)
@@ -274,13 +273,13 @@ class Environment(Env):
 
 
     def speedWheel(self, distance_to_point, angle): # TODO remove error
-        r = distance_to_point / 2 * math.cos(math.radians((90 - abs(angle * 2))))
+        r = distance_to_point / (2 * math.cos(math.radians((90 - angle))))
 
         if angle > 0:
             v_left = 1
-            v_right = 1 - 2 * r / self.robot_diameter
+            v_right = 1 * ((r - self.robot_diameter) / (r + self.robot_diameter))
         else:
-            v_left = 1 - 2 * r / self.robot_diameter
+            v_left = 1 * ((r + self.robot_diameter) / (r - self.robot_diameter))
             v_right = 1
 
         return np.array([v_left, v_right])
