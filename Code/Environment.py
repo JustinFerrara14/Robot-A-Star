@@ -246,24 +246,18 @@ class Environment(Env):
         else:
             angle_to_goal2 = self.anglePosition(self.goal_position)
 
-
-        # Cas 1 : le robot ne ragarde pas le point et la distance est grande
-        # if abs(angle_to_goal1) > turn_threshold and np.linalg.norm(self.robot_positions[0] - self.path[self.index_path]) > threshold_distance:
-        #     # Si l'angle est positif, tourner à droite (vitesse roue gauche > vitesse roue droite)
-        #     if angle_to_goal1 > 0:
-        #         v_left = turn_speed
-        #         v_right = -turn_speed
-        #     # Si l'angle est négatif, tourner à gauche (vitesse roue droite > vitesse roue gauche)
-        #     else:
-        #         v_left = -turn_speed
-        #         v_right = turn_speed
-
-        # else :
-        #     v_left, v_right = self.speedWheel(np.linalg.norm(self.robot_positions[0] - self.path[self.index_path]), angle_to_goal2)
-
-        v_left, v_right = self.speedWheel(np.linalg.norm(self.robot_positions[0] - self.path[self.index_path]),
+        # Si la courbe s'éloigne trop de la ligne, tourner sur soi-même
+        dist = self.distMaxFromLine(np.linalg.norm(self.robot_positions[0] - self.path[self.index_path]), angle_to_goal1)
+        if dist > 200:
+            if angle_to_goal1 > 0:
+                v_left = turn_speed
+                v_right = -turn_speed
+            else:
+                v_left = -turn_speed
+                v_right = turn_speed
+        else:
+            v_left, v_right = self.speedWheel(np.linalg.norm(self.robot_positions[0] - self.path[self.index_path]),
                                           angle_to_goal1)
-
 
         # Normaliser les vitesses entre -1 et 1
         v_left = np.clip(v_left, -1, 1)
@@ -283,6 +277,15 @@ class Environment(Env):
             v_right = 1
 
         return np.array([v_left, v_right])
+
+    def distMaxFromLine(self, distance_to_point, angle):
+
+        if angle == 0:
+            return 0
+        else:
+            r = distance_to_point / (2 * math.cos(math.radians((90 - angle))))
+
+        return abs(math.tan(math.radians(90-angle)) * distance_to_point / 2 - r)
 
 
     def normalizePositions(self):  # TODO assert
