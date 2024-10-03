@@ -34,9 +34,6 @@ class Environment(Env):
         self.count_step_randomRobots = 0
         self.robot_last_positions = np.zeros((1, 2))
         self.robot_last_angles = np.zeros(1)
-        self.max_percentage_deviation = 6  # 1.5 -> 150% des steps minimum pour atteindre la cible
-        self.max_iterations = self.init_max_iterations()
-        # self.initialize_robot_positions(self.save_pos_init_robot, self.save_angle_init_robot)
         self.obstacles = obstacles
         self.init_goal_angle = 0
 
@@ -48,12 +45,6 @@ class Environment(Env):
                                        dtype=np.float32)  # 2 valeurs entre -1 et 1 pour sorties
         self.observation_space = spaces.Box(low=-1, high=1, shape=(4,), dtype=np.float32)  # 4 valeurs en entrée
 
-    def init_max_iterations(self):
-        self.max_iterations = int(
-            self.max_percentage_deviation * np.linalg.norm(self.goal_position - self.robot_positions[0]) / (
-                    self.max_speed * self.time_interval_command))
-
-        return self.max_iterations
 
     def init_robot_positions(self, pos_init_robot=None, angle_init_robot=None, pos_goal=None):
 
@@ -122,8 +113,6 @@ class Environment(Env):
         new_pos_y = self.robot_positions[robot_index][1]
         act_angle_rad = self.robot_angles[robot_index] * (math.pi / 180)
 
-        self.robot_last_angles = np.copy(self.robot_angles[0])
-
         v_left, v_right = wheel_speeds
         v_right *= self.max_speed
         v_left *= self.max_speed
@@ -154,13 +143,9 @@ class Environment(Env):
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
-
         self.init_robot_positions()
-        self.init_max_iterations()
-
         self.init_obstacles()
 
-        return self.getState(), {}
 
     def step(self, actions):
         self.robot_last_positions = np.copy(self.robot_positions)
@@ -177,15 +162,6 @@ class Environment(Env):
             done = True
         elif np.linalg.norm(self.robot_positions[0] - self.goal_position) < self.threshold_distance:  # Goal reached
             done = True
-
-        if False:
-            print("Terminated : ")
-            print("Goal pos: ", self.goal_position)
-            print("Init pos: ", self.robot_init_pos)
-            print("Init angle: ", self.save_angle_init_robot)
-            print("Final pos: ", self.robot_positions[0])
-            for obs in self.obstacles:
-                print("Obstacle pos: ", obs.get_position())
 
         return done
 
@@ -228,36 +204,30 @@ class Environment(Env):
         # Paramètres de contrôle
         turn_threshold = 10  # Seuil pour décider si le robot doit tourner
         turn_speed = 0.6  # Vitesse de rotation
-        forward_speed = 1  # Vitesse en ligne droite
         threshold_distance = 50
 
         # Initialisation des vitesses de roues
         v_left = 0
         v_right = 0
 
-        if np.linalg.norm(self.robot_positions[0] - self.path[self.index_path]) < threshold_distance and self.index_path + 1 < len(self.path):
+        # Calculer la distance à l'objectif actuel une seule fois
+        distance_to_target = np.linalg.norm(self.robot_positions[0] - self.path[self.index_path])
+
+        # Mise à jour de l'index du chemin
+        if distance_to_target < threshold_distance and self.index_path + 1 < len(self.path):
             self.index_path += 1
 
         # Angle entre la direction actuelle du robot et l'objectif
         angle_to_goal1 = self.anglePosition(self.path[self.index_path])
 
-        if self.index_path + 1 < len(self.path):
-            angle_to_goal2 = self.anglePosition(self.path[self.index_path + 1])
-        else:
-            angle_to_goal2 = self.anglePosition(self.goal_position)
+        # Calcul de la distance maximale par rapport à la ligne
+        dist = self.distMaxFromLine(distance_to_target, angle_to_goal1)
 
         # Si la courbe s'éloigne trop de la ligne, tourner sur soi-même
-        dist = self.distMaxFromLine(np.linalg.norm(self.robot_positions[0] - self.path[self.index_path]), angle_to_goal1)
-        if dist > 200:
-            if angle_to_goal1 > 0:
-                v_left = turn_speed
-                v_right = -turn_speed
-            else:
-                v_left = -turn_speed
-                v_right = turn_speed
+        if dist > 100:
+            v_left, v_right = (turn_speed, -turn_speed) if angle_to_goal1 > 0 else (-turn_speed, turn_speed)
         else:
-            v_left, v_right = self.speedWheel(np.linalg.norm(self.robot_positions[0] - self.path[self.index_path]),
-                                          angle_to_goal1)
+            v_left, v_right = self.speedWheel(distance_to_target, angle_to_goal1)
 
         # Normaliser les vitesses entre -1 et 1
         v_left = np.clip(v_left, -1, 1)
@@ -265,28 +235,28 @@ class Environment(Env):
 
         return np.array([v_left, v_right])
 
+    def speedWheel(self, distance_to_point, angle):
+        if angle == 0:
+            return np.array([1, 1])
 
-    def speedWheel(self, distance_to_point, angle): # TODO remove error
         r = distance_to_point / (2 * math.cos(math.radians((90 - angle))))
 
         if angle > 0:
             v_left = 1
-            v_right = 1 * ((r - self.robot_diameter) / (r + self.robot_diameter))
+            v_right = 1 * (r - self.robot_diameter) / (r + self.robot_diameter)
         else:
-            v_left = 1 * ((r + self.robot_diameter) / (r - self.robot_diameter))
+            v_left = 1 * (r + self.robot_diameter) / (r - self.robot_diameter)
             v_right = 1
 
         return np.array([v_left, v_right])
 
     def distMaxFromLine(self, distance_to_point, angle):
-
         if angle == 0:
             return 0
-        else:
-            r = distance_to_point / (2 * math.cos(math.radians((90 - angle))))
 
-        return abs(math.tan(math.radians(90-angle)) * distance_to_point / 2 - r)
+        r = distance_to_point / (2 * math.cos(math.radians((90 - angle))))
 
+        return abs(math.tan(math.radians(90 - angle)) * distance_to_point / 2 - r)
 
     def normalizePositions(self):  # TODO assert
         result = []

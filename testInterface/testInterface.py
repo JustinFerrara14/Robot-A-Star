@@ -300,7 +300,6 @@ class App:
 
             self.environment = Environment(4000, 2000, np.array(goal_pos), start_pos, start_angle, obstacles)
             self.environment.init_robot_positions(start_pos, start_angle, np.array(goal_pos))
-            self.environment.init_max_iterations()
 
             self.astar = AStarAlgorithm(4000, 2000, 20, self.environment.obstacles)
             self.path = self.astar.a_star_search(self.environment.robot_positions[0], self.environment.goal_position)

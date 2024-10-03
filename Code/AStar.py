@@ -24,7 +24,7 @@ class AStarAlgorithm:
         for obstacle in obstacles:
             x, y = obstacle.get_position()
             radius = obstacle.get_radius()
-            radius += 200  # Rayon du robot (optionnel)
+            radius += 250  # Rayon du robot (optionnel)
             x_grid, y_grid = self.mm_to_grid((x, y))
             radius_grid = int(radius / self.spacing)
             for i in range(-radius_grid, radius_grid + 1):
@@ -83,10 +83,6 @@ class AStarAlgorithm:
                 final_path.append(pos)
 
         # Affichage du chemin
-        for position in final_path:
-            print("->", position, end=" ")
-        print()
-
         curved_path = self.put_points_curve(final_path, 100)
         for position in curved_path:
             print("->", position, end=" ")
