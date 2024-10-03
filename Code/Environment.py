@@ -8,42 +8,29 @@ from Code.Obstacle import Obstacle
 
 
 class Environment(Env):
-    def __init__(self, map_max_x, map_max_y, goal_position, pos_init_robot, angle_init_robot, obstacles=None):
-        # Convert tuple in numpy array
-        # self.save_pos_init_robot = np.array(pos_init_robot)
-        # self.save_angle_init_robot = np.array(angle_init_robot)
-
-        self.save_pos_init_robot = pos_init_robot
-        self.save_angle_init_robot = angle_init_robot
-
+    def __init__(self, map_max_x, map_max_y, goal_position, pos_init_robot=None, angle_init_robot=None, obstacles=None):
         self.map_max_x = map_max_x  # Largeur de la carte 4000
         self.map_max_y = map_max_y  # Hauteur de la carte 2000
         self.map_max_dist = np.linalg.norm([self.map_max_x, self.map_max_y])
         self.robot_positions = np.zeros((1, 2))  # positions des robots (x, y)
-        self.robot_init_pos = np.zeros((1, 2))
+        if pos_init_robot is not None:
+            self.robot_positions[0] = pos_init_robot
+
         self.robot_velocities = np.zeros(1)  # vitesses des robots
         self.robot_angles = np.zeros(1)  # angle des robots
+        if angle_init_robot is not None:
+            self.robot_angles = np.array([angle_init_robot])
+
         self.threshold_distance = 20  # Distance seuil pour détecter une collision
         self.goal_position = goal_position  # Position de l'objectif
-        self.iteration_count = 0
         self.robot_diameter = 300
-        self.distance_moved = 0  # Distance totale parcourue par le robot
         self.time_interval = 0.01  # Temps entre chaque appel d'un update de position en s
         self.time_interval_command = 0.2  # Temps entre chaque modification possible par réseau neuronnes en s
         self.max_speed = 50  # Vitesse max du robot en mm/s
-        self.count_step_randomRobots = 0
-        self.robot_last_positions = np.zeros((1, 2))
-        self.robot_last_angles = np.zeros(1)
         self.obstacles = obstacles
-        self.init_goal_angle = 0
 
         self.path = []
         self.index_path = 0
-
-        # Définir les espaces d'action et d'observation
-        self.action_space = spaces.Box(low=-1, high=1, shape=(2,),
-                                       dtype=np.float32)  # 2 valeurs entre -1 et 1 pour sorties
-        self.observation_space = spaces.Box(low=-1, high=1, shape=(4,), dtype=np.float32)  # 4 valeurs en entrée
 
 
     def init_robot_positions(self, pos_init_robot=None, angle_init_robot=None, pos_goal=None):
@@ -55,8 +42,6 @@ class Environment(Env):
         else:
             self.robot_positions[0] = np.array([np.random.randint(151, self.map_max_x - 151),
                                                 np.random.randint(151, self.map_max_y - 151)])
-
-        self.robot_init_pos = np.copy(self.robot_positions[0])
 
         # Init Goal position
         if pos_goal is not None:
@@ -71,9 +56,6 @@ class Environment(Env):
         else:
             self.robot_angles = np.array([np.random.randint(0, 360)])
 
-        self.save_angle_init_robot = np.copy(self.robot_angles[0])
-        self.iteration_count = 0
-        self.init_goal_angle = self.angleGoal()
 
     def init_obstacles(self):
         if self.obstacles is None:
@@ -123,8 +105,6 @@ class Environment(Env):
         delta_distance = (dist_right + dist_left) / 2
         delta_angle = math.atan((dist_left - dist_right) / self.robot_diameter)
 
-        self.distance_moved += delta_distance
-
         new_pos_x += delta_distance * math.sin(act_angle_rad * -1)
         new_pos_y += delta_distance * math.cos(act_angle_rad)
         act_angle_rad += delta_angle
@@ -148,14 +128,11 @@ class Environment(Env):
 
 
     def step(self, actions):
-        self.robot_last_positions = np.copy(self.robot_positions)
 
         for _ in range(0, int(self.time_interval_command / self.time_interval)):
             self.update_positions(0, actions)
             if self.check_collision():
                 break
-
-        self.iteration_count += 1
 
         done = False
         if self.check_collision():  # Collision
@@ -165,18 +142,14 @@ class Environment(Env):
 
         return done
 
-    def pilot_robot(self, goal):
+    def pilot_robot(self, goal): # En tournant sur lui-même et en avançant en ligne droite
         # Angle entre la direction actuelle du robot et l'objectif
         angle_to_goal = self.anglePosition(goal)
 
         # Paramètres de contrôle
         turn_threshold = 10  # Seuil pour décider si le robot doit tourner
-        turn_speed = 0.6  # Vitesse de rotation
+        turn_speed = 0.8  # Vitesse de rotation
         forward_speed = 1  # Vitesse en ligne droite
-
-        # Initialisation des vitesses de roues
-        v_left = 0
-        v_right = 0
 
         # Cas 1 : le robot doit tourner pour aligner sa direction avec l'objectif
         if abs(angle_to_goal) > turn_threshold:
@@ -202,19 +175,13 @@ class Environment(Env):
 
     def pilot_robot_curves(self):
         # Paramètres de contrôle
-        turn_threshold = 10  # Seuil pour décider si le robot doit tourner
         turn_speed = 0.6  # Vitesse de rotation
-        threshold_distance = 50
-
-        # Initialisation des vitesses de roues
-        v_left = 0
-        v_right = 0
 
         # Calculer la distance à l'objectif actuel une seule fois
         distance_to_target = np.linalg.norm(self.robot_positions[0] - self.path[self.index_path])
 
         # Mise à jour de l'index du chemin
-        if distance_to_target < threshold_distance and self.index_path + 1 < len(self.path):
+        if distance_to_target < self.threshold_distance and self.index_path + 1 < len(self.path):
             self.index_path += 1
 
         # Angle entre la direction actuelle du robot et l'objectif
