@@ -11,7 +11,7 @@ The final goal is to move from a position A to B, as fast as possible without hi
 > Note: The GUI is in rough state
 
 ## Start the program
-To start the programm you can simply run this file: ![/testInterface/testInterface.py](/testInterface/testInterface.py)
+To start the programm you can simply run this file: [/testInterface/testInterface.py](/testInterface/testInterface.py)
 
 ## Map
 
