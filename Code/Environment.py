@@ -29,8 +29,10 @@ class Environment(Env):
         self.max_speed = 50  # Vitesse max du robot en mm/s
         self.obstacles = obstacles
 
+        self.dist_to_line = 0
+
         self.path = []
-        self.index_path = 0
+        self.index_path = 1
 
 
     def init_robot_positions(self, pos_init_robot=None, angle_init_robot=None, pos_goal=None):
@@ -188,10 +190,10 @@ class Environment(Env):
         angle_to_goal1 = self.anglePosition(self.path[self.index_path])
 
         # Calcul de la distance maximale par rapport à la ligne
-        dist = self.distMaxFromLine(distance_to_target, angle_to_goal1)
+        self.dist_to_line = self.distMaxFromLine(distance_to_target, angle_to_goal1)
 
         # Si la courbe s'éloigne trop de la ligne, tourner sur soi-même
-        if dist > 100:
+        if self.dist_to_line > 100:
             v_left, v_right = (turn_speed, -turn_speed) if angle_to_goal1 > 0 else (-turn_speed, turn_speed)
         else:
             v_left, v_right = self.speedWheel(distance_to_target, angle_to_goal1)

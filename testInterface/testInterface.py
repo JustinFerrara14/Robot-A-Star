@@ -1,10 +1,6 @@
 import tkinter as tk
-from tkinter import ttk
-from tkinter import filedialog
 import numpy as np
 import math
-from stable_baselines3 import PPO
-from stable_baselines3.common.env_util import DummyVecEnv
 import random
 
 from Code.Environment import Environment
@@ -16,11 +12,12 @@ class App:
     def __init__(self, root):
         self.root = root
         self.root.title("Robot Navigation")
-        self.root.geometry("1000x800")
+        self.root.geometry("1000x700")
 
         self.environment = None
         self.astar = None
         self.path = None
+        self.simulation_done = False
 
         self.start_label = tk.Label(root, text="Enter Start Position (x, y):")
         self.start_label.pack()
@@ -49,6 +46,10 @@ class App:
 
         self.reset_button = tk.Button(root, text="Reset", command=self.reset_gui)
         self.reset_button.pack()
+
+        # Add space
+        self.space_label = tk.Label(root, text="")
+        self.space_label.pack()
 
         self.canvas = tk.Canvas(root, width=800, height=400, bg="white")
         self.canvas.pack()
@@ -91,9 +92,21 @@ class App:
         self.current_dist_obstacle_label.pack()
         self.current_dist_obstacle_label.place(x=150, y=40)
 
-        self.current_reward_label = tk.Label(root, text="Reward: 0")
-        self.current_reward_label.pack()
-        self.current_reward_label.place(x=150, y=70)
+        self.current_dist_line_label = tk.Label(root, text="Dist max from line: 0")
+        self.current_dist_line_label.pack()
+        self.current_dist_line_label.place(x=150, y=70)
+
+        # Step by step mode
+        self.step_by_step_mode = tk.BooleanVar(value=False)  # Flag to keep track of the mode
+        self.continue_simulation = False  # Flag to continue or pause simulation
+
+        self.step_by_step_label = tk.Label(root, text="Step-by-step Mode")
+        self.step_by_step_label.pack()
+        self.step_by_step_label.place(x=600, y=10)
+
+        self.step_by_step_slider = tk.Checkbutton(root, variable=self.step_by_step_mode, onvalue=True, offvalue=False)
+        self.step_by_step_slider.pack()
+        self.step_by_step_slider.place(x=750, y=10)
 
         # Pilot mode
         self.manual_command_label = tk.Label(root, text="Enter manual command (left, right):")
@@ -151,12 +164,8 @@ class App:
         self.draw_legends()
 
     def reset_gui(self):
-        self.reset_environment()
-        self.canvas.delete("all")
-
-    def reset_environment(self):
         self.environment = None
-        self.continue_simulation = False
+        self.canvas.delete("all")
 
     def draw_legends(self):
         # Adding legends for the map
@@ -244,6 +253,10 @@ class App:
         dist_to_obstacle = self.environment.distanceObstacle()
         self.current_dist_obstacle_label.config(text=f"Dist to obstacle: {dist_to_obstacle:.2f}")
 
+        dist_max_line = self.environment.dist_to_line
+        self.current_dist_line_label.config(text=f"Dist max from line: {dist_max_line:.2f}")
+
+
     def randomize_values(self):
         max_x = 4000  # Assuming the max value for x
         max_y = 2000  # Assuming the max value for y
@@ -279,13 +292,13 @@ class App:
         self.obstacle3_rad.insert(0, str(150))
 
     def start_simulation(self):
-        # self.reset_environment()  # Reset the environment before starting the simulation
-
-        if not self.environment:  # Check if the environment is not already initialized
+        if not self.environment:
+            # Initialize environment if it's not already initialized
             start_pos = (int(self.start_x.get()), int(self.start_y.get()))
             goal_pos = (int(self.goal_x.get()), int(self.goal_y.get()))
             start_angle = float(self.angle.get())
             obstacles = []
+
             if self.obstacle1_x.get() and self.obstacle1_y.get() and self.obstacle1_rad.get():
                 obstacles.append(
                     Obstacle(int(self.obstacle1_x.get()), int(self.obstacle1_y.get()), int(self.obstacle1_rad.get())))
@@ -304,29 +317,45 @@ class App:
             self.astar = AStarAlgorithm(4000, 2000, 20, self.environment.obstacles)
             self.path = self.astar.a_star_search(self.environment.robot_positions[0], self.environment.goal_position)
 
+            if not self.path:
+                print("No path found")
+                return
+
             self.environment.path = np.copy(self.path)
-            self.environment.index_path = 0
+            self.environment.index_path = 1
 
-            done = False
-            while not done:
-                self.draw_robot()
+            self.simulation_done = False  # Flag to indicate if the simulation is done
 
-                if self.command_left.get() and self.command_right.get():
-                    actions = [float(self.command_left.get()), float(self.command_right.get())]
-                else:
-                    # actions = self.environment.pilot_robot(position)
-                    actions = self.environment.pilot_robot_curves()
+        if not self.simulation_done:
+            self.simulation_step()  # Execute a single simulation step
 
-                command_left = actions[0]
-                self.current_command_left_label.config(text=f"Command to left: {command_left:.2f}")
+            # If step-by-step mode is not enabled, continue simulation automatically
+            if not self.step_by_step_mode.get():
+                self.root.after(50, self.start_simulation)
 
-                command_right = actions[1]
-                self.current_command_right_label.config(text=f"Command to right: {command_right:.2f}")
+    def simulation_step(self):
+        self.draw_robot()
 
-                done = self.environment.step(actions)
+        # Get manual commands if they exist, otherwise pilot the robot
+        if self.command_left.get() and self.command_right.get():
+            actions = [float(self.command_left.get()), float(self.command_right.get())]
+        else:
+            if not self.path:
+                return # No path found
+            actions = self.environment.pilot_robot_curves()
 
-                self.root.update()
-                self.root.after(50)
+        # Update command labels
+        command_left = actions[0]
+        self.current_command_left_label.config(text=f"Command to left: {command_left:.2f}")
+
+        command_right = actions[1]
+        self.current_command_right_label.config(text=f"Command to right: {command_right:.2f}")
+
+        # Execute the step in the environment
+        self.simulation_done = self.environment.step(actions)
+
+        # Update GUI
+        self.root.update()
 
 
 if __name__ == "__main__":
