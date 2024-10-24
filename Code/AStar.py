@@ -20,11 +20,17 @@ class AStarAlgorithm:
         self.spacing = spacing
         self.grid = [[1 for _ in range(self.COL)] for _ in range(self.ROW)]
 
+        # Enlever les points près des murs
+        for i in range(self.ROW):
+            for j in range(self.COL):
+                if i < 250 / spacing or j < 250 / spacing or i > self.ROW - 250 / spacing or j > self.COL - 250 / spacing:
+                    self.grid[i][j] = 0
+
         # Ajouter des obstacles (si fournis)
         for obstacle in obstacles:
             x, y = obstacle.get_position()
             radius = obstacle.get_radius()
-            radius += 250  # Rayon du robot (optionnel)
+            radius += 250  # Rayon du robot
             x_grid, y_grid = self.mm_to_grid((x, y))
             radius_grid = int(radius / self.spacing)
             for i in range(-radius_grid, radius_grid + 1):

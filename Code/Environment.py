@@ -32,7 +32,7 @@ class Environment(Env):
         self.dist_to_line = 0
 
         self.path = []
-        self.index_path = 1
+        self.index_path = 0
 
 
     def init_robot_positions(self, pos_init_robot=None, angle_init_robot=None, pos_goal=None):

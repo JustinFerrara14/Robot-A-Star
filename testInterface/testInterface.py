@@ -322,7 +322,6 @@ class App:
                 return
 
             self.environment.path = np.copy(self.path)
-            self.environment.index_path = 1
 
             self.simulation_done = False  # Flag to indicate if the simulation is done
 
