@@ -11,7 +11,20 @@ The final goal is to move from a position A to B, as fast as possible without hi
 > Note: The GUI is in rough state
 
 ## Start the program
-To start the programm you can simply run this file: [/testInterface/testInterface.py](/testInterface/testInterface.py)
+
+To start the programm you can simply run use the following command:
+
+```bash
+# Create a virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows use `.venv\Scripts\activate`
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the program
+python src/testInterface.py
+```
 
 ## Map
 
